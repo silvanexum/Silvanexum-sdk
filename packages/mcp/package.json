@@ -1,6 +1,6 @@
 {
   "name": "@silvanexum/mcp",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "mcpName": "io.github.silvanexum/silvanexum",
   "description": "Model Context Protocol server for Silvanexum — the spend-control plane for AI agents. Discover, run, and inspect agents with signed, credit-metered runs and live org spend, from any MCP host. Run with `npx -y @silvanexum/mcp`.",
   "license": "Apache-2.0",

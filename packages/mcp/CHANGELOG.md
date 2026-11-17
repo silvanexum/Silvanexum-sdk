@@ -1,5 +1,13 @@
 # @silvanexum/mcp
 
+## 0.6.3
+
+### Patch Changes
+
+- 374ee32: Published from the public repository (github.com/silvanexum/Silvanexum-sdk) with npm provenance, so each tarball is signed and linked to the commit and workflow run that built it. No code changes.
+- Updated dependencies [374ee32]
+  - @silvanexum/sdk@0.6.3
+
 ## 0.6.2
 
 ### Patch Changes

@@ -12,7 +12,7 @@ name: Release
 #   npm     -> npm Trusted Publishing (OIDC): each package's npmjs.com settings trust
 #              silvanexum/Silvanexum-sdk + release.yml. No token to rotate or expire.
 #   PyPI    -> needs the `pypi-sdk` + `pypi-mcp` + `pypi-relay` GitHub Environments (OIDC Trusted Publishing)
-#   VSIX    -> needs secrets.VSCE_PAT (Marketplace) + secrets.OVSX_PAT (Open VSX)
+#   VSIX    -> VS Code Marketplace via Trusted Publishing (OIDC); Open VSX via OVSX_PAT until its trusted publisher is registered
 # See packages/*/README + docs/platform/modules/M19 for the secret setup.
 
 on:
@@ -174,10 +174,13 @@ jobs:
           skip-existing: true
 
   # ---------------------------------------------------------------------------
-  # 4. VSIX: build the M17 extension once, publish to VS Code Marketplace
-  #    (VSCE_PAT) AND Open VSX (OVSX_PAT — matters for Cursor/VSCodium/Windsurf).
-  #    Each push is independently guarded so a missing token skips just that
-  #    registry rather than failing the release.
+  # 4. VSIX: build the extension once, publish to the VS Code Marketplace and
+  #    Open VSX (matters for Cursor/VSCodium/Windsurf).
+  #    VS Code Marketplace: Trusted Publishing (OIDC). The publisher's policy
+  #    allows only this repo, this workflow file and the `vsx` environment, so
+  #    no token is stored anywhere.
+  #    Open VSX: Trusted Publishing once the namespace registration exists;
+  #    until then it falls back to the OVSX_PAT secret, and skips if neither.
   # ---------------------------------------------------------------------------
   vsix:
     needs: npm
@@ -186,6 +189,14 @@ jobs:
     # npm job's result (the extension version is decoupled from the SDK).
     if: ${{ always() && (needs.npm.outputs.published == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_vsix)) }}
     runs-on: ubuntu-latest
+    environment: vsx
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for Marketplace / Open VSX Trusted Publishing
+    env:
+      # Job-level so step `if:` conditions can see it (step-level env is not
+      # visible to that step's own `if:`).
+      HAS_OVSX_PAT: ${{ secrets.OVSX_PAT != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -193,32 +204,24 @@ jobs:
         with: { node-version: 20, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter silvanexum-vscode build
-      # vsce/ovsx are one-shot tools (pnpm dlx) — not committed deps, matching the
-      # minimal-dependency-surface rule (no install-time scripts added to the pkg).
+      # vsce/ovsx are one-shot tools (pnpm dlx), not committed deps.
       - name: Package VSIX
         working-directory: packages/vscode
-        run: pnpm dlx @vscode/vsce@^3 package --no-dependencies -o "$RUNNER_TEMP/silvanexum.vsix"
+        run: pnpm dlx @vscode/vsce@^4 package --no-dependencies -o "$RUNNER_TEMP/silvanexum.vsix"
 
-      - name: Publish to VS Code Marketplace
-        if: ${{ env.VSCE_PAT != '' }}
+      - name: Publish to VS Code Marketplace (Trusted Publishing)
         working-directory: packages/vscode
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: pnpm dlx @vscode/vsce@^3 publish --no-dependencies --skip-duplicate --packagePath "$RUNNER_TEMP/silvanexum.vsix"
+        run: pnpm dlx @vscode/vsce@^4 publish --oidc --no-dependencies --skip-duplicate --packagePath "$RUNNER_TEMP/silvanexum.vsix"
 
-      - name: Publish to Open VSX
-        if: ${{ env.OVSX_PAT != '' }}
-        working-directory: packages/vscode
+      - name: Publish to Open VSX (token fallback)
+        if: ${{ env.HAS_OVSX_PAT == 'true' }}
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: pnpm dlx ovsx@^0.10 publish "$RUNNER_TEMP/silvanexum.vsix" -p "$OVSX_PAT" --skip-duplicate
+        run: pnpm dlx ovsx@^1.4 publish "$RUNNER_TEMP/silvanexum.vsix" -p "$OVSX_PAT" --skip-duplicate
 
-      - name: Note (no marketplace tokens — VSIX publish inert)
-        if: ${{ env.VSCE_PAT == '' && env.OVSX_PAT == '' }}
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: echo "::warning::VSCE_PAT/OVSX_PAT not set — VSIX built but not published."
+      - name: Open VSX skipped
+        if: ${{ env.HAS_OVSX_PAT != 'true' }}
+        run: echo "::notice::Open VSX publish skipped (namespace trusted publisher not registered yet and no OVSX_PAT)."
 
       - uses: actions/upload-artifact@v4
         with:

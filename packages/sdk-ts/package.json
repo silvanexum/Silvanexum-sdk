@@ -1,6 +1,6 @@
 {
   "name": "@silvanexum/sdk",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Official TypeScript/JavaScript SDK for Silvanexum — the spend-control plane for AI agents. Meter, attribute, cap, and audit agent spend across a multi-agent mesh, on any model or rail. Types generated from the API's Zod contracts.",
   "license": "Apache-2.0",
   "homepage": "https://docs.silvanexum.com",

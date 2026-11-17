@@ -47,7 +47,8 @@
     "budget"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "devDependencies": {
     "tsup": "^8.3.5",

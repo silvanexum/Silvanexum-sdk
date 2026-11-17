@@ -6,6 +6,10 @@
 # `--git-checks` to the npm CLI, which current npm rejects (EUNKNOWNCONFIG). So:
 # `pnpm pack` (resolves workspace:^ ranges) → `npm publish <tarball>` (OIDC auth).
 #
+# --provenance: npm signs a Sigstore attestation linking the tarball to this
+# public repo, commit and workflow run (shown as "Built and signed on GitHub
+# Actions" on npmjs.com). Requires the OIDC token from release.yml.
+#
 # Prints "New tag: <name>@<version>" per publish, and tags the commit with it.
 set -euo pipefail
 
@@ -22,7 +26,7 @@ for dir in "${PACKAGES[@]}"; do
   echo "publishing $name@$version"
   rm -f "$OUT"/*.tgz
   (cd "$dir" && pnpm pack --pack-destination "$OUT" >/dev/null)
-  if ! npm publish "$OUT"/*.tgz --access public; then
+  if ! npm publish "$OUT"/*.tgz --access public --provenance; then
     # npm keeps processing an upload for a few minutes after accepting it, so a
     # follow-up run can collide with it (E409). If the version landed, that's fine.
     sleep 30

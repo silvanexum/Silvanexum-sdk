@@ -1,0 +1,253 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # macOS legs run here only: GitHub's macOS runners are often out of capacity,
+  # and a never-started job used to fail every push and PR.
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+# Least-privilege by default; the SBOM job uploads an artifact only.
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Contract-drift gate + JS build/typecheck/test. The single source of truth is
+  # the backend's src/shared/* Zod contracts; a stale generated artifact fails.
+  # ---------------------------------------------------------------------------
+  contracts-and-js:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_READ_TOKEN: ${{ secrets.BACKEND_READ_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      # Drift gate (OPTIONAL): the codegen reads the backend Zod contracts. We
+      # only check out the backend + run the drift check when BACKEND_READ_TOKEN
+      # is configured — otherwise CI builds/tests the committed generated files
+      # and stays green. (Set the secret to enable the fail-closed drift gate.)
+      - uses: actions/checkout@v4
+        if: ${{ env.BACKEND_READ_TOKEN != '' }}
+        with:
+          repository: silvanexum/Silvanexum-backend
+          path: ../Silvanexum-Backend
+          token: ${{ secrets.BACKEND_READ_TOKEN }}
+      - uses: pnpm/action-setup@v4   # version comes from packageManager in package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check generated artifacts are current (drift gate)
+        if: ${{ env.BACKEND_READ_TOKEN != '' }}
+        run: pnpm generate:check
+
+      # Build the SDK first: @silvanexum/mcp imports @silvanexum/sdk's built
+      # type declarations (dist/index.d.ts), so typecheck must run after.
+      - run: pnpm --filter @silvanexum/sdk build
+      - run: pnpm -r --filter "./packages/*" typecheck
+      - run: pnpm --filter @silvanexum/sdk test
+      - run: pnpm --filter silvanexum-codegen test
+      - run: pnpm --filter @silvanexum/mcp test
+      - run: pnpm --filter silvanexum-vscode test
+      - run: pnpm --filter @silvanexum/mcp build
+
+  # ---------------------------------------------------------------------------
+  # Python package: build + test + lint across the supported interpreter range.
+  # ---------------------------------------------------------------------------
+  python:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS only on the weekly/manual run (see `on:`); Linux + Windows gate
+        # every push and PR.
+        os: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '["ubuntu-latest","macos-latest","windows-latest"]' || '["ubuntu-latest","windows-latest"]') }}
+        python-version: ["3.9", "3.12"]
+        # ubuntu-latest (26.04) no longer ships Python 3.9; Windows (and macOS
+        # weekly) still cover the 3.9 floor from pyproject's requires-python.
+        exclude:
+          - os: ubuntu-latest
+            python-version: "3.9"
+    defaults:
+      run:
+        working-directory: packages/sdk-py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]" build
+      # The generated models must import cleanly (regression guard for the
+      # Python reserved-word alias fix — e.g. the `from` field on *Query models).
+      - name: Import smoke test
+        run: python -c "import silvanexum; print('import OK')"
+      - run: python -m pytest -q
+      - run: ruff check .
+      - run: python -m build
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+  # ---------------------------------------------------------------------------
+  # Python MCP server: tools register + tool surface matches the TS server.
+  # Installs the local `silvanexum` (sdk-py) first so mcp-py tests the in-repo
+  # client, not a published one.
+  # ---------------------------------------------------------------------------
+  python-mcp:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/mcp-py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ../sdk-py
+      - run: pip install -e . pytest
+      - name: Import smoke test
+        run: python -c "import silvanexum_mcp.server; print('import OK')"
+      - run: python -m pytest -q
+
+  # ---------------------------------------------------------------------------
+  # Python NAT plugin (silvanexum-nat): lint + build + tests against a supported
+  # NeMo Agent Toolkit release. Installs the local `silvanexum` (sdk-py) first so
+  # the plugin tests the in-repo client, then nvidia-nat-core for the exporter.
+  # NAT needs Python >= 3.11, so this job doesn't run on 3.9.
+  # ---------------------------------------------------------------------------
+  python-nat-plugin:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: packages/nat-plugin-py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ../sdk-py
+      - run: pip install -e ".[dev]" "nvidia-nat-core>=1.8" build
+      - name: Import smoke test (plugin registers)
+        run: python -c "import silvanexum_nat.register as r; print('type=', r.SilvanexumTelemetryExporter.static_type())"
+      - run: python -m pytest -q
+      - run: ruff check .
+      - run: python -m build
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+  # ---------------------------------------------------------------------------
+  # Python Relay plugin (silvanexum-relay): lint + type + build + tests against a
+  # supported NeMo Relay worker SDK. Installs the in-repo `silvanexum` first,
+  # then nemo-relay-plugin. Relay needs Python >= 3.11.
+  # ---------------------------------------------------------------------------
+  python-relay-plugin:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: packages/relay-plugin-py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ../sdk-py
+      - run: pip install -e ".[dev]" "nemo-relay-plugin>=0.11,<1" "nemo-relay-cli-bin>=0.11,<1" build
+      - name: Import smoke test (worker plugin loads)
+        run: python -c "from silvanexum_relay.worker import SilvanexumPlugin; print('plugin_id=', SilvanexumPlugin.plugin_id)"
+      # NVIDIA's own validators, not just our tests: Relay must accept what we ship.
+      - name: Manifest digest matches worker.py
+        run: python scripts/manifest_digest.py
+      - name: Relay accepts the worker manifest
+        run: nemo-relay plugins validate ./relay-plugin.toml
+      - name: Relay accepts the pricing catalog
+        run: nemo-relay model-pricing validate catalogs/silvanexum-pricing.json
+      - run: python -m pytest -q
+      - run: ruff check .
+      - run: mypy silvanexum_relay --ignore-missing-imports
+      - run: python -m build
+        env:
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+  # ---------------------------------------------------------------------------
+  # Full package-manager matrix: clean install + import smoke from a packed
+  # tarball / built wheel, on each PM a developer might actually use.
+  # No registry needed — we install the locally-built artifacts.
+  # ---------------------------------------------------------------------------
+  js-pm-matrix:
+    needs: contracts-and-js
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pm: [npm, pnpm, yarn, bun]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      # bun isn't preinstalled on GitHub runners (npm/pnpm/yarn are); install it
+      # only for the bun matrix leg so its install+import smoke test can run.
+      - uses: oven-sh/setup-bun@v2
+        if: ${{ matrix.pm == 'bun' }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @silvanexum/sdk build
+      - name: Pack the SDK tarball
+        run: pnpm --filter @silvanexum/sdk exec npm pack --pack-destination "$RUNNER_TEMP"
+      - name: "Install + import via ${{ matrix.pm }}"
+        run: bash scripts/test-install-js.sh "${{ matrix.pm }}" "$RUNNER_TEMP"
+
+  py-pm-matrix:
+    needs: python
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pm: [pip, uv, poetry]
+    defaults:
+      run:
+        working-directory: packages/sdk-py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install build
+      - run: python -m build
+      - name: "Install + import via ${{ matrix.pm }}"
+        run: bash ../../scripts/test-install-py.sh "${{ matrix.pm }}" "$(pwd)/dist"
+
+  # ---------------------------------------------------------------------------
+  # CycloneDX SBOM for the JS workspace + the Python package. Uploaded as a
+  # build artifact; the release pipeline attaches the same to the GitHub release.
+  # ---------------------------------------------------------------------------
+  sbom:
+    needs: contracts-and-js
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pnpm install --frozen-lockfile
+      - name: Generate SBOMs (CycloneDX)
+        run: bash scripts/sbom.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom/
+          if-no-files-found: error

@@ -1,0 +1,23 @@
+name: Bug report
+description: Something in an SDK, the MCP server or a plugin doesn't work as expected
+labels: [bug]
+body:
+  - type: input
+    id: package
+    attributes:
+      label: Package and version
+      placeholder: "@silvanexum/sdk 0.6.2"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got instead. Remove any API keys.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "Node 20 / Python 3.12, OS"

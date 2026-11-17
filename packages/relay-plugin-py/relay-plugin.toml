@@ -1,0 +1,37 @@
+# NeMo Relay discoverable worker-plugin manifest for silvanexum-relay
+# (format: https://docs.nvidia.com/nemo/relay/latest/build-plugins/workers/python).
+#
+# From a source checkout of this package:
+#   nemo-relay plugins add ./relay-plugin.toml
+#   nemo-relay plugins enable silvanexum
+# From PyPI, generate an installable folder instead (see README):
+#   python -m silvanexum_relay init ./silvanexum-relay-plugin
+#
+# integrity.sha256 is the digest of source.artifact. Regenerate it after editing
+# worker.py with:  python scripts/manifest_digest.py --write
+manifest_version = 1
+
+[plugin]
+id = "silvanexum"
+kind = "worker"
+
+[compat]
+relay = ">=0.11.0,<1.0"
+worker_protocol = "grpc-v1"
+
+[defaults]
+enabled = false
+
+[capabilities]
+items = ["plugin_worker"]
+
+[source]
+manifest_root = "."
+artifact = "silvanexum_relay/worker.py"
+
+[integrity]
+sha256 = "sha256:9e0f372b541f912eaf4ffe7c1f69966933e76d05a84ec10a414192acb6f7d706"
+
+[load]
+runtime = "python"
+entrypoint = "silvanexum_relay.worker:main"

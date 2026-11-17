@@ -1,0 +1,2 @@
+# relay-plugin.toml pins the SHA-256 of worker.py; keep it byte-identical on every OS.
+silvanexum_relay/worker.py text eol=lf

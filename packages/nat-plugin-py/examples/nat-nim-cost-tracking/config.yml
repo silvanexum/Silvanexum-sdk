@@ -1,0 +1,41 @@
+# NeMo Agent Toolkit workflow: a NIM model with Silvanexum cost tracking.
+#
+# Run:
+#   export NVIDIA_API_KEY="nvapi-..."        # your build.nvidia.com key
+#   export SILVANEXUM_API_KEY="sx_live_..."  # read + run scopes
+#   nat run --config_file config.yml --input "Give me one fact about the Hopper GPU."
+#
+# Every LLM call is reported to Silvanexum, priced server-side, and attributed to
+# agent="nim-cost-demo". Watch it land under Spending in the Silvanexum dashboard.
+
+general:
+  telemetry:
+    tracing:
+      # Enable the Silvanexum exporter (provided by the `silvanexum-nat` package).
+      silvanexum:
+        _type: silvanexum
+        agent: nim-cost-demo
+        # customer: acme-inc        # optional: attribute to a tenant
+        # provider: nim             # pin for a SELF-HOSTED NIM (otherwise a NIM
+        #                           # model name is inferred as hosted "nvidia")
+        enforce_budget: false       # flag-and-log budget pre-flight (see plugin README)
+        batch_size: 25
+        flush_interval_s: 5.0
+
+llms:
+  nim_llm:
+    _type: nim
+    # Hosted NIM on build.nvidia.com -> Silvanexum provider "nvidia" (inferred
+    # from the model name). For a SELF-HOSTED NIM container, also set the LLM's
+    # base_url below AND pin `provider: nim` in the silvanexum exporter config
+    # above — the exporter can't see the LLM's base_url, so the pin is required
+    # to price it as self-hosted rather than at hosted build.nvidia.com rates.
+    model_name: meta/llama-3.1-8b-instruct
+    # base_url: http://localhost:8000/v1   # self-hosted NIM (then set provider: nim above)
+
+workflow:
+  _type: react_agent
+  llm_name: nim_llm
+  verbose: true
+  # No tools needed for the demo; the agent answers directly.
+  tool_names: []

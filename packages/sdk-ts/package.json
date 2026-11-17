@@ -1,0 +1,57 @@
+{
+  "name": "@silvanexum/sdk",
+  "version": "0.6.2",
+  "description": "Official TypeScript/JavaScript SDK for Silvanexum — the spend-control plane for AI agents. Meter, attribute, cap, and audit agent spend across a multi-agent mesh, on any model or rail. Types generated from the API's Zod contracts.",
+  "license": "Apache-2.0",
+  "homepage": "https://docs.silvanexum.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/silvanexum/Silvanexum-sdk.git",
+    "directory": "packages/sdk-ts"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "keywords": [
+    "silvanexum",
+    "agents",
+    "ai",
+    "llm",
+    "sdk",
+    "finops",
+    "cost",
+    "spend",
+    "observability",
+    "budget"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

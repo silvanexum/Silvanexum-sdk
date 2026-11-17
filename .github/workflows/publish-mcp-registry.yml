@@ -1,0 +1,43 @@
+name: Publish to MCP Registry
+
+# Publishes packages/mcp/server.json to the official MCP Registry
+# (registry.modelcontextprotocol.io) via GitHub OIDC — no secrets needed.
+#
+# PREREQUISITES (validation fails otherwise):
+#   - @silvanexum/mcp@<server.json npm version> is published on npm WITH a
+#     matching `mcpName` field in its package.json (added via changeset).
+#   - silvanexum-mcp@<server.json pypi version> is published on PyPI WITH an
+#     `<!-- mcp-name: io.github.silvanexum/silvanexum -->` line in its README.
+#   - The io.github.silvanexum/* namespace is OIDC-owned by this repo's owner
+#     (silvanexum), which it is.
+#
+# Run manually from the Actions tab once the above versions are live.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: mcp-registry
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write   # GitHub OIDC auth to the MCP Registry
+
+jobs:
+  mcp-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Authenticate (GitHub OIDC)
+        run: "$GITHUB_WORKSPACE/mcp-publisher login github-oidc"
+
+      - name: Publish server to MCP Registry
+        working-directory: packages/mcp
+        run: "$GITHUB_WORKSPACE/mcp-publisher publish"

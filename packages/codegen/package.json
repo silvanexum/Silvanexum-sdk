@@ -1,0 +1,19 @@
+{
+  "name": "silvanexum-codegen",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Generates the OpenAPI spec and typed SDK clients from the backend's src/shared/* Zod contracts (single source of truth). Dependency-light: zod + zod-to-json-schema only.",
+  "type": "module",
+  "scripts": {
+    "build": "echo \"codegen is run via tsx, not built\"",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

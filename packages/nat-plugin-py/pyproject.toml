@@ -1,0 +1,68 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "silvanexum-nat"
+version = "0.1.0"
+description = "Silvanexum cost-metering plugin for NVIDIA NeMo Agent Toolkit (NAT). A telemetry exporter that reports each LLM call to Silvanexum — the spend-control plane for AI agents — for server-side pricing, per-agent and per-customer attribution, and budget pre-flight. Add a few lines of workflow YAML and get cost tracking for NIM and OpenAI-compatible models."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = "Apache-2.0"
+authors = [{ name = "Silvanexum" }]
+keywords = ["silvanexum", "nvidia", "nemo", "nat", "nim", "agents", "ai", "llm", "finops", "cost", "spend", "observability", "budget", "telemetry"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: Apache Software License",
+  "Intended Audience :: Developers",
+]
+dependencies = [
+  # NAT's core carries the plugin-authoring surface (nat.plugin_api) and the
+  # observability exporter base classes. No upper bound so compatible future
+  # toolkit releases satisfy it; CI validates against supported releases.
+  "nvidia-nat-core>=1.8",
+  "silvanexum>=0.3,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "mypy>=1.11"]
+# NAT's own test utilities. Kept separate from `dev` so the fast mapping/exporter
+# unit tests (which mock NAT) can run without pulling the full toolkit.
+nat-test = ["nvidia-nat-test>=1.8"]
+
+[project.urls]
+Homepage = "https://docs.silvanexum.com"
+Documentation = "https://docs.silvanexum.com"
+Repository = "https://github.com/silvanexum/Silvanexum-sdk"
+
+# NAT discovers external components through the `nat.plugins` entry point group.
+# Importing the target module runs the @register_telemetry_exporter decorator.
+[project.entry-points."nat.plugins"]
+silvanexum = "silvanexum_nat.register"
+
+[tool.hatch.build.targets.wheel]
+packages = ["silvanexum_nat"]
+
+[tool.hatch.build.targets.sdist]
+include = ["silvanexum_nat", "README.md", "RESEARCH.md", "examples"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.mypy]
+python_version = "3.11"
+
+# NAT ships no py.typed marker.
+[[tool.mypy.overrides]]
+module = ["nat.*"]
+ignore_missing_imports = true

@@ -1,0 +1,226 @@
+name: Release
+
+# The release supply chain for every artifact a developer installs:
+#   @silvanexum/sdk + @silvanexum/mcp  -> npm (provenance / OIDC)
+#   silvanexum + silvanexum-mcp + silvanexum-relay -> PyPI (Trusted Publishing / sigstore)
+#   Silvanexum VSIX                    -> VS Code Marketplace + Open VSX
+# Versioning is changeset-gated; the SDK + MCP npm packages are a fixed group.
+#
+# INERT-UNTIL-SECRETS: every build / generate / drift-check / SBOM step runs on
+# every push. The actual registry pushes are guarded so a fork or a repo without
+# publishing secrets configured runs the whole pipeline green WITHOUT publishing:
+#   npm     -> npm Trusted Publishing (OIDC): each package's npmjs.com settings trust
+#              silvanexum/Silvanexum-sdk + release.yml. No token to rotate or expire.
+#   PyPI    -> needs the `pypi-sdk` + `pypi-mcp` + `pypi-relay` GitHub Environments (OIDC Trusted Publishing)
+#   VSIX    -> needs secrets.VSCE_PAT (Marketplace) + secrets.OVSX_PAT (Open VSX)
+# See packages/*/README + docs/platform/modules/M19 for the secret setup.
+
+on:
+  push:
+    branches: [main]
+  # Manual trigger to publish artifacts that aren't tied to an SDK version bump:
+  # the VS Code extension (Marketplace + Open VSX) and the MCP Registry entry.
+  workflow_dispatch:
+    inputs:
+      publish_vsix:
+        description: "Publish the VS Code extension to VS Code Marketplace + Open VSX"
+        type: boolean
+        default: true
+      publish_pypi:
+        description: "Publish the Python packages (silvanexum + silvanexum-mcp + silvanexum-relay) to PyPI"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Least privilege by default: read-only at the workflow level. Each job that
+# needs write/OIDC rights grants exactly what it needs (the npm job below, and
+# the pypi job's own `permissions:`). This stops a compromised tool in the sbom
+# or vsix job from minting an npm/PyPI publish OIDC token or pushing commits.
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Build everything, drift-check, and let changesets manage versions.
+  #    On a normal push it opens/updates the "Version Packages" PR. When that
+  #    PR merges (i.e. changesets are present), `publish` runs and emits
+  #    `published`/`publishedPackages` so downstream registries fire only then.
+  # ---------------------------------------------------------------------------
+  npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # signed tags + GitHub release notes
+      id-token: write       # npm provenance (OIDC) Trusted Publishing
+      pull-requests: write  # changesets "Version Packages" PR
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      # Trusted Publishing needs npm >= 11.5.1; pnpm 9 publishes through the npm CLI.
+      - run: npm install -g npm@latest && npm --version
+      - run: pnpm install --frozen-lockfile
+
+      # Generated artifacts are committed; the API-drift gate runs in CI, not in
+      # the release path — so publishing has no dependency on the backend repo.
+      # Build before typecheck: mcp typechecks against the sdk's built d.ts.
+      - run: pnpm -r --filter "./packages/*" build
+      - run: pnpm -r --filter "./packages/*" typecheck
+
+      # Changesets opens/updates the "Version Packages" PR while changesets are
+      # pending. Publishing is a separate step so no npm token is ever written:
+      # `changeset publish` → pnpm → npm CLI, which authenticates via GitHub OIDC
+      # (Trusted Publishing). Already-published versions are skipped, so this is
+      # a no-op on pushes that don't bump a version.
+      - name: Create or update the release PR
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to npm (Trusted Publishing)
+        id: publish
+        if: ${{ steps.changesets.outputs.hasChangesets == 'false' }}
+        run: |
+          set -o pipefail
+          bash scripts/publish-npm.sh 2>&1 | tee publish.log
+          if grep -q "New tag:" publish.log; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            # Tag the release so the GitHub release / SBOM steps can find it.
+            git push origin --tags
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+        # Provenance requires a public source repo; repo is private, so it's off.
+
+  # ---------------------------------------------------------------------------
+  # 2. SBOM (CycloneDX) for the published version, attached to the GH release.
+  # ---------------------------------------------------------------------------
+  sbom:
+    needs: npm
+    if: ${{ needs.npm.outputs.published == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pnpm install --frozen-lockfile
+      - run: bash scripts/sbom.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: sbom, path: sbom/, if-no-files-found: error }
+
+  # ---------------------------------------------------------------------------
+  # 3. PyPI: silvanexum (SDK) + silvanexum-mcp + silvanexum-relay via Trusted Publishing.
+  #    No token — OIDC mints a short-lived credential and PyPI records a sigstore
+  #    attestation (attestations: true). Gated on a successful npm publish so the
+  #    version-synced release lands together. The `pypi-sdk` / `pypi-mcp` / `pypi-relay`
+  #    Environments carry the Trusted-Publishing config; absent them, this job is inert.
+  # ---------------------------------------------------------------------------
+  pypi:
+    needs: npm
+    # Runs on a version-synced SDK publish OR on a manual dispatch with
+    # publish_pypi=true (PyPI versions are decoupled from npm, so this lets us
+    # ship the Python packages without churning an npm release). always() lets the
+    # manual path run regardless of the npm job's changeset outcome.
+    if: ${{ always() && (needs.npm.outputs.published == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_pypi)) }}
+    runs-on: ubuntu-latest
+    # Each package gets its OWN PyPI Environment so the Trusted-Publishing
+    # configs are DISTINCT. A shared (repo + workflow + environment) tuple can only
+    # be one *pending* publisher at a time, so `silvanexum`, `silvanexum-mcp` and
+    # `silvanexum-relay` must differ on the environment name or they collide on registration.
+    environment: ${{ matrix.environment }}
+    permissions:
+      id-token: write     # OIDC token for Trusted Publishing
+      contents: read      # a job-level permissions block replaces the default set,
+                          # so checkout of this PRIVATE repo needs read granted back
+    strategy:
+      fail-fast: false   # one package failing must not cancel the others' uploads
+      matrix:
+        include:
+          - pkg: sdk-py
+            environment: pypi-sdk
+          - pkg: mcp-py
+            environment: pypi-mcp
+          - pkg: relay-plugin-py
+            environment: pypi-relay
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.pkg }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install build
+      - run: python -m build
+      - name: Publish to PyPI (Trusted Publishing + sigstore attestation)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/${{ matrix.pkg }}/dist
+          attestations: true
+          # An unchanged package (same version) is a no-op, not a failure.
+          skip-existing: true
+
+  # ---------------------------------------------------------------------------
+  # 4. VSIX: build the M17 extension once, publish to VS Code Marketplace
+  #    (VSCE_PAT) AND Open VSX (OVSX_PAT — matters for Cursor/VSCodium/Windsurf).
+  #    Each push is independently guarded so a missing token skips just that
+  #    registry rather than failing the release.
+  # ---------------------------------------------------------------------------
+  vsix:
+    needs: npm
+    # Runs on an SDK publish (carried along) OR on a manual dispatch with
+    # publish_vsix=true. always() lets the manual path run independently of the
+    # npm job's result (the extension version is decoupled from the SDK).
+    if: ${{ always() && (needs.npm.outputs.published == 'true' || (github.event_name == 'workflow_dispatch' && inputs.publish_vsix)) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter silvanexum-vscode build
+      # vsce/ovsx are one-shot tools (pnpm dlx) — not committed deps, matching the
+      # minimal-dependency-surface rule (no install-time scripts added to the pkg).
+      - name: Package VSIX
+        working-directory: packages/vscode
+        run: pnpm dlx @vscode/vsce@^3 package --no-dependencies -o "$RUNNER_TEMP/silvanexum.vsix"
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ env.VSCE_PAT != '' }}
+        working-directory: packages/vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: pnpm dlx @vscode/vsce@^3 publish --no-dependencies --skip-duplicate --packagePath "$RUNNER_TEMP/silvanexum.vsix"
+
+      - name: Publish to Open VSX
+        if: ${{ env.OVSX_PAT != '' }}
+        working-directory: packages/vscode
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: pnpm dlx ovsx@^0.10 publish "$RUNNER_TEMP/silvanexum.vsix" -p "$OVSX_PAT" --skip-duplicate
+
+      - name: Note (no marketplace tokens — VSIX publish inert)
+        if: ${{ env.VSCE_PAT == '' && env.OVSX_PAT == '' }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: echo "::warning::VSCE_PAT/OVSX_PAT not set — VSIX built but not published."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: ${{ runner.temp }}/silvanexum.vsix

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "silvanexum-mcp"
+version = "0.2.0"
+description = "Model Context Protocol server for Silvanexum — the spend-control plane for AI agents. Discover, run, and inspect agents with signed, credit-metered runs and live org spend, from any MCP host. Run with `uvx silvanexum-mcp`."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Silvanexum" }]
+keywords = ["silvanexum", "mcp", "model-context-protocol", "agents", "ai", "claude", "finops", "cost", "spend"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: Apache Software License",
+  "Intended Audience :: Developers",
+]
+dependencies = [
+  "mcp>=1.2,<2",
+  "silvanexum>=0.1,<1",
+]
+
+[project.scripts]
+silvanexum-mcp = "silvanexum_mcp.server:main"
+
+[project.urls]
+Homepage = "https://docs.silvanexum.com"
+Repository = "https://github.com/silvanexum/Silvanexum-sdk"
+
+[tool.hatch.build.targets.wheel]
+packages = ["silvanexum_mcp"]

@@ -1,0 +1,31 @@
+# NeMo Relay plugins.toml for the LangChain + NIM cost-control example.
+#
+#   silvanexum : meters every LLM call to Silvanexum and hard-blocks on budget
+#                (a grpc-v1 worker; add it first with `nemo-relay plugins add`).
+#   pricing    : Relay's built-in local cost estimate, fed by the Silvanexum
+#                pricing catalog shipped with this package (works offline).
+version = 1
+
+# Relay's server mode requires signed plugins by default; allow integrity-checked
+# workers until silvanexum-relay releases are signed.
+[plugins.policy.defaults]
+attestation = "integrity_only"
+
+[[plugins.dynamic]]
+manifest = "../../relay-plugin.toml"
+
+[plugins.dynamic.config]
+# api_key defaults to $SILVANEXUM_API_KEY
+agent = "relay-nim-demo"
+# customer = "acme-inc"      # or send x-silvanexum-customer per request
+enforce_budget = true        # reject a call that would breach the budget
+fail_open = true             # if Silvanexum is unreachable, allow the call
+# provider = "nim"           # uncomment for a SELF-HOSTED NIM (see plugin README)
+
+[[components]]
+kind = "pricing"
+enabled = true
+
+[[components.config.sources]]
+type = "file"
+path = "../../catalogs/silvanexum-pricing.json"

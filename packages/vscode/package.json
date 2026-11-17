@@ -1,0 +1,138 @@
+{
+  "name": "silvanexum-vscode",
+  "displayName": "Silvanexum",
+  "version": "0.2.1",
+  "private": true,
+  "description": "Spend control for AI agents, in your editor — budgets & enforcement, spend attribution, the agent→agent mesh hop ledger, fleet drift, and signed-trace replay.",
+  "license": "Apache-2.0",
+  "publisher": "silvanexum",
+  "repository": { "type": "git", "url": "https://github.com/silvanexum/Silvanexum-sdk.git", "directory": "packages/vscode" },
+  "engines": { "vscode": "^1.101.0" },
+  "categories": ["AI", "Chat", "Other"],
+  "keywords": ["silvanexum", "agents", "ai", "llm"],
+  "main": "./dist/extension.js",
+  "icon": "media/icon.png",
+  "galleryBanner": { "color": "#0b0f14", "theme": "dark" },
+  "activationEvents": ["onStartupFinished"],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "The Silvanexum account token is only sent to the configured (machine-scoped) API host. Opening an untrusted folder cannot change that host."
+    }
+  },
+  "contributes": {
+    "mcpServerDefinitionProviders": [
+      { "id": "silvanexum", "label": "Silvanexum" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "silvanexum", "title": "Silvanexum", "icon": "media/icon.svg" }
+      ]
+    },
+    "views": {
+      "silvanexum": [
+        { "id": "silvanexum.spend", "name": "Spend", "icon": "$(graph)", "contextualTitle": "Silvanexum Spend" },
+        { "id": "silvanexum.budgets", "name": "Budgets", "icon": "$(dashboard)", "contextualTitle": "Silvanexum Budgets" },
+        { "id": "silvanexum.mesh", "name": "Mesh", "icon": "$(git-merge)", "contextualTitle": "Silvanexum Mesh" },
+        { "id": "silvanexum.fleet", "name": "Fleet", "icon": "$(pulse)", "contextualTitle": "Silvanexum Fleet" },
+        { "id": "silvanexum.marketplace", "name": "Marketplace", "icon": "$(verified)", "contextualTitle": "Silvanexum Marketplace" },
+        { "id": "silvanexum.agents", "name": "My Agents", "icon": "$(robot)", "contextualTitle": "Silvanexum Agents" },
+        { "id": "silvanexum.templates", "name": "Templates", "icon": "$(cloud-download)", "contextualTitle": "Silvanexum Templates" }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "silvanexum.spend",
+        "contents": "Sign in to see agent spend, set budgets, and trace the mesh.\n[Sign In](command:silvanexum.signIn)",
+        "when": "true"
+      },
+      {
+        "view": "silvanexum.budgets",
+        "contents": "Set a spend cap to control agent cost.\n[Create Budget](command:silvanexum.createBudget)",
+        "when": "true"
+      }
+    ],
+    "commands": [
+      { "command": "silvanexum.signIn", "title": "Sign In", "category": "Silvanexum", "icon": "$(account)" },
+      { "command": "silvanexum.signOut", "title": "Sign Out", "category": "Silvanexum" },
+      { "command": "silvanexum.findAgent", "title": "Find Agent", "category": "Silvanexum", "icon": "$(search)" },
+      { "command": "silvanexum.runAgent", "title": "Run Agent", "category": "Silvanexum", "icon": "$(play)" },
+      { "command": "silvanexum.showProof", "title": "Show Proof", "category": "Silvanexum", "icon": "$(verified)" },
+      { "command": "silvanexum.publishVersion", "title": "Publish Version", "category": "Silvanexum", "icon": "$(tag)" },
+      { "command": "silvanexum.deployTemplate", "title": "Deploy Template", "category": "Silvanexum", "icon": "$(cloud-download)" },
+      { "command": "silvanexum.openRun", "title": "Open Run Trace", "category": "Silvanexum" },
+      { "command": "silvanexum.openRunById", "title": "Open Run", "category": "Silvanexum", "icon": "$(link-external)" },
+      { "command": "silvanexum.refresh", "title": "Refresh", "category": "Silvanexum", "icon": "$(refresh)" },
+      { "command": "silvanexum.searchMarketplace", "title": "Filter Marketplace", "category": "Silvanexum", "icon": "$(filter)" },
+      { "command": "silvanexum.openSpend", "title": "Open Spend", "category": "Silvanexum", "icon": "$(graph)" },
+      { "command": "silvanexum.setSpendGroupBy", "title": "Group Spend By", "category": "Silvanexum", "icon": "$(list-tree)" },
+      { "command": "silvanexum.createBudget", "title": "Create Budget", "category": "Silvanexum", "icon": "$(add)" },
+      { "command": "silvanexum.deleteBudget", "title": "Delete Budget", "category": "Silvanexum", "icon": "$(trash)" },
+      { "command": "silvanexum.toggleMeshDirection", "title": "Toggle Mesh Direction", "category": "Silvanexum", "icon": "$(arrow-swap)" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "silvanexum.openSpend", "when": "view == silvanexum.spend", "group": "navigation@1" },
+        { "command": "silvanexum.setSpendGroupBy", "when": "view == silvanexum.spend", "group": "navigation@2" },
+        { "command": "silvanexum.refresh", "when": "view == silvanexum.spend", "group": "navigation@3" },
+        { "command": "silvanexum.createBudget", "when": "view == silvanexum.budgets", "group": "navigation@1" },
+        { "command": "silvanexum.refresh", "when": "view == silvanexum.budgets", "group": "navigation@2" },
+        { "command": "silvanexum.toggleMeshDirection", "when": "view == silvanexum.mesh", "group": "navigation@1" },
+        { "command": "silvanexum.refresh", "when": "view == silvanexum.mesh", "group": "navigation@2" },
+        { "command": "silvanexum.refresh", "when": "view == silvanexum.fleet", "group": "navigation@1" },
+        { "command": "silvanexum.searchMarketplace", "when": "view == silvanexum.marketplace", "group": "navigation@1" },
+        { "command": "silvanexum.refresh", "when": "view == silvanexum.marketplace", "group": "navigation@2" },
+        { "command": "silvanexum.publishVersion", "when": "view == silvanexum.agents", "group": "navigation@1" },
+        { "command": "silvanexum.refresh", "when": "view == silvanexum.agents", "group": "navigation@2" },
+        { "command": "silvanexum.refresh", "when": "view == silvanexum.templates", "group": "navigation@1" }
+      ],
+      "view/item/context": [
+        { "command": "silvanexum.deleteBudget", "when": "view == silvanexum.budgets && viewItem == sxBudget", "group": "inline" },
+        { "command": "silvanexum.openRunById", "when": "view == silvanexum.mesh && viewItem == sxHopWithRun", "group": "inline" },
+        { "command": "silvanexum.runAgent", "when": "view == silvanexum.agents && viewItem == sxAgent", "group": "inline" },
+        { "command": "silvanexum.showProof", "when": "view == silvanexum.agents && viewItem == sxAgent", "group": "inline" },
+        { "command": "silvanexum.runAgent", "when": "view == silvanexum.marketplace && viewItem == sxListing", "group": "inline" },
+        { "command": "silvanexum.deployTemplate", "when": "view == silvanexum.templates && viewItem == sxTemplate", "group": "inline" }
+      ]
+    },
+    "configuration": {
+      "title": "Silvanexum",
+      "properties": {
+        "silvanexum.apiBaseUrl": {
+          "type": "string",
+          "default": "https://api.silvanexum.com",
+          "scope": "machine",
+          "description": "Silvanexum API base URL. Machine-scoped so a workspace cannot redirect your token to another host."
+        },
+        "silvanexum.webBaseUrl": {
+          "type": "string",
+          "default": "https://silvanexum.com",
+          "scope": "machine",
+          "description": "Silvanexum web base URL (for replay links). Machine-scoped so a workspace cannot override it."
+        },
+        "silvanexum.codeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show proof badges on @sx.capture call sites."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "vscode:prepublish": "node esbuild.mjs",
+    "package": "vsce package --no-dependencies",
+    "publish:vsce": "vsce publish --no-dependencies",
+    "publish:ovsx": "ovsx publish --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.101.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  }
+}

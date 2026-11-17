@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "silvanexum-relay"
+version = "0.1.0"
+description = "Silvanexum plugin for NVIDIA NeMo Relay. A grpc-v1 worker plugin that meters every LLM call to Silvanexum — the spend-control plane for AI agents — for server-side pricing and per-agent/per-customer attribution, and can reject an LLM call before it runs when a budget is exhausted. Ships a Relay pricing catalog for Nemotron and NIM models."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = "Apache-2.0"
+authors = [{ name = "Silvanexum" }]
+keywords = ["silvanexum", "nvidia", "nemo", "relay", "nim", "nemotron", "agents", "ai", "llm", "finops", "cost", "spend", "budget", "guardrail", "observability", "langchain", "langgraph"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: Apache Software License",
+  "Intended Audience :: Developers",
+]
+dependencies = [
+  # The Python authoring SDK for NeMo Relay out-of-process grpc-v1 worker
+  # plugins. No upper bound within 0.x so compatible Relay releases satisfy it;
+  # CI validates against the pinned release.
+  "nemo-relay-plugin>=0.11,<1",
+  "silvanexum>=0.3,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "respx>=0.21", "ruff>=0.6", "mypy>=1.11"]
+
+[project.urls]
+Homepage = "https://docs.silvanexum.com"
+Documentation = "https://docs.silvanexum.com"
+Repository = "https://github.com/silvanexum/Silvanexum-sdk"
+
+[tool.hatch.build.targets.wheel]
+packages = ["silvanexum_relay"]
+
+[tool.hatch.build.targets.sdist]
+include = ["silvanexum_relay", "README.md", "RESEARCH.md", "examples", "catalogs", "scripts", "relay-plugin.toml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

@@ -3,7 +3,7 @@
   "name": "io.github.silvanexum/silvanexum",
   "title": "Silvanexum",
   "description": "Spend control for AI agents - cost attribution, budget caps, and signed runs as MCP tools.",
-  "version": "0.4.0",
+  "version": "0.6.3",
   "repository": {
     "url": "https://github.com/silvanexum/Silvanexum-sdk",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "@silvanexum/mcp",
-      "version": "0.4.0",
+      "version": "0.6.3",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

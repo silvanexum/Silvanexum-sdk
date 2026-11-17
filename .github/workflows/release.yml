@@ -101,7 +101,7 @@ jobs:
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
-        # Provenance requires a public source repo; repo is private, so it's off.
+        # Provenance is on (scripts/publish-npm.sh --provenance) now that the repo is public.
 
   # ---------------------------------------------------------------------------
   # 2. SBOM (CycloneDX) for the published version, attached to the GH release.

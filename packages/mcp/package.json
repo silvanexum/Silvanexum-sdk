@@ -39,7 +39,8 @@
     "spend"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
